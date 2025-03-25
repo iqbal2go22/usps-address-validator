@@ -11,6 +11,8 @@ CONSUMER_SECRET = "ZyViTGQUTjwkAAnLIDwYU9rUlHJQPlXWJH8KQCK7Yvngh9qXVgVMn99ZHziQo
 # OpenCage API for geocoding
 OPENCAGE_API_KEY = "e52347a41d064e48a19091df61ad7a3a"
 
+
+
 # ------------------ USPS Auth ------------------
 def get_access_token():
     url = "https://apis.usps.com/oauth2/v3/token"
@@ -114,4 +116,75 @@ if uploaded_file:
         with st.spinner("🔐 Getting USPS access token..."):
             token = get_access_token()
 
-        if token
+        if token:
+            valid_count = 0
+            invalid_count = 0
+            update_count = 0
+
+            df['IsValid'] = ''
+            df['StandardizedAddress'] = ''
+            df['ValidationMessage'] = ''
+            df['NeedsUpdate'] = ''
+            df['Latitude'] = ''
+            df['Longitude'] = ''
+
+            with st.spinner("📦 Validating and geocoding..."):
+                for i, row in df.iterrows():
+                    address1 = str(row.get('Adress1', '')).strip()
+                    address2 = row.get('Adress2', '')
+                    address2 = str(address2).strip() if pd.notna(address2) else ''
+                    street = f"{address2} {address1}".strip()
+                    city = str(row.get("City", "")).strip()
+                    state = str(row.get("State", "")).strip()
+                    zip_code = str(row.get("Zip5", "")).strip()
+
+                    original_input = f"{address2} {address1}, {city}, {state} {zip_code}".strip()
+
+                    result = validate_address(token, street, city, state, zip_code, original_input)
+
+                    df.at[i, 'IsValid'] = result["IsValid"]
+                    df.at[i, 'StandardizedAddress'] = result["StandardizedAddress"]
+                    df.at[i, 'ValidationMessage'] = result["ValidationMessage"]
+                    df.at[i, 'NeedsUpdate'] = result["NeedsUpdate"]
+
+                    if result["IsValid"]:
+                        valid_count += 1
+                        if result["NeedsUpdate"]:
+                            update_count += 1
+                        # Geocode if valid
+                        lat, lng = get_geocode(result["StandardizedAddress"])
+                        df.at[i, 'Latitude'] = lat
+                        df.at[i, 'Longitude'] = lng
+                    else:
+                        invalid_count += 1
+
+            st.success(f"🎯 Done! ✔️ {valid_count} valid | ❌ {invalid_count} invalid | ⚠️ {update_count} need update")
+
+            df_display = df.copy()
+            df_display['Status'] = df['IsValid'].apply(lambda x: '✔️ Valid' if x else '❌ Invalid')
+            df_display['NeedsUpdate'] = df['NeedsUpdate'].apply(lambda x: '⚠️ Yes' if x else '')
+
+            display_columns = [
+                'Adress1', 'Adress2', 'City', 'State', 'Zip5',
+                'Status', 'StandardizedAddress', 'NeedsUpdate', 'ValidationMessage',
+                'Latitude', 'Longitude'
+            ]
+            existing_cols = [col for col in display_columns if col in df_display.columns]
+            df_display = df_display[existing_cols]
+
+            st.markdown("### 🧾 Validation Results")
+            st.dataframe(df_display.style.applymap(
+                lambda val: 'color: green' if val == '✔️ Valid' else (
+                    'color: red' if val == '❌ Invalid' else (
+                        'color: orange' if val == '⚠️ Yes' else None)),
+                subset=['Status', 'NeedsUpdate']
+            ))
+
+            output = io.BytesIO()
+            df.to_excel(output, index=False)
+            st.download_button(
+                label="📥 Download Results as Excel",
+                data=output.getvalue(),
+                file_name="validated_addresses_with_geocodes.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
