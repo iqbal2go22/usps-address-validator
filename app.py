@@ -8,6 +8,10 @@ import io
 CONSUMER_KEY = "kMt8AuLvXACeHwys6rb0gqxH2TFMK0tmmyAXaC7SiQAWeQHN"
 CONSUMER_SECRET = "ZyViTGQUTjwkAAnLIDwYU9rUlHJQPlXWJH8KQCK7Yvngh9qXVgVMn99ZHziQok3r"
 
+# OpenCage API for geocoding
+OPENCAGE_API_KEY = "e52347a41d064e48a19091df61ad7a3a"
+
+# ------------------ USPS Auth ------------------
 def get_access_token():
     url = "https://apis.usps.com/oauth2/v3/token"
     headers = {"Content-Type": "application/json"}
@@ -23,6 +27,7 @@ def get_access_token():
         st.error("❌ Failed to get USPS access token.")
         return None
 
+# ------------------ USPS Address Validation ------------------
 def validate_address(token, street, city, state, zip_code_input, original_full_address):
     url = "https://apis.usps.com/addresses/v3/address"
     headers = {"Authorization": f"Bearer {token}"}
@@ -40,7 +45,6 @@ def validate_address(token, street, city, state, zip_code_input, original_full_a
         if response.status_code == 200:
             data = response.json()["address"]
             standardized = f"{data.get('secondaryAddress', '')} {data['streetAddress']}, {data['city']}, {data['state']} {data['ZIPCode']}".strip()
-            # Check if input matches standardized
             needs_update = standardized.upper() != original_full_address.upper()
 
             return {
@@ -72,11 +76,31 @@ def validate_address(token, street, city, state, zip_code_input, original_full_a
             "NeedsUpdate": False
         }
 
-# ---------- Streamlit UI ----------
-st.set_page_config(page_title="USPS Address Validator", layout="centered")
-st.title("📬 USPS Address Validator")
+# ------------------ Geocoding ------------------
+def get_geocode(address):
+    url = f"https://api.opencagedata.com/geocode/v1/json"
+    params = {
+        "q": address,
+        "key": OPENCAGE_API_KEY,
+        "limit": 1
+    }
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            results = response.json().get("results", [])
+            if results:
+                lat = results[0]["geometry"]["lat"]
+                lng = results[0]["geometry"]["lng"]
+                return lat, lng
+        return None, None
+    except Exception:
+        return None, None
+
+# ------------------ Streamlit UI ------------------
+st.set_page_config(page_title="SiteOne Address Validator", layout="centered")
+st.title("📍 SiteOne Address Validator")
 st.markdown("Upload an Excel file with columns: **Adress1**, **Adress2**, **City**, **State**, **Zip5**")
-st.markdown("The app checks each address using the USPS API and flags anything that needs standardization.")
+st.markdown("The app validates U.S. addresses using USPS and geocodes them using OpenCage.")
 
 uploaded_file = st.file_uploader("📤 Upload your Excel file", type=["xlsx"])
 
@@ -86,68 +110,8 @@ if uploaded_file:
     st.write("📄 **Preview:**")
     st.dataframe(df.head())
 
-    if st.button("🚀 Validate Addresses"):
+    if st.button("🚀 Validate and Geocode"):
         with st.spinner("🔐 Getting USPS access token..."):
             token = get_access_token()
 
-        if token:
-            valid_count = 0
-            invalid_count = 0
-            update_count = 0
-
-            df['IsValid'] = ''
-            df['StandardizedAddress'] = ''
-            df['ValidationMessage'] = ''
-            df['NeedsUpdate'] = ''
-
-            with st.spinner("📦 Validating each address..."):
-                for i, row in df.iterrows():
-                    address1 = str(row.get('Adress1', '')).strip()
-                    address2 = row.get('Adress2', '')
-                    address2 = str(address2).strip() if pd.notna(address2) else ''
-                    street = f"{address2} {address1}".strip()
-                    city = str(row.get("City", "")).strip()
-                    state = str(row.get("State", "")).strip()
-                    zip_code = str(row.get("Zip5", "")).strip()
-
-                    original_input = f"{address2} {address1}, {city}, {state} {zip_code}".strip()
-
-                    result = validate_address(token, street, city, state, zip_code, original_input)
-
-                    df.at[i, 'IsValid'] = result["IsValid"]
-                    df.at[i, 'StandardizedAddress'] = result["StandardizedAddress"]
-                    df.at[i, 'ValidationMessage'] = result["ValidationMessage"]
-                    df.at[i, 'NeedsUpdate'] = result["NeedsUpdate"]
-
-                    if result["IsValid"]:
-                        valid_count += 1
-                        if result["NeedsUpdate"]:
-                            update_count += 1
-                    else:
-                        invalid_count += 1
-
-            st.success(f"🎯 Done! ✔️ {valid_count} valid | ❌ {invalid_count} invalid | ⚠️ {update_count} need update")
-
-            # Prepare a user-friendly display
-            df_display = df.copy()
-            df_display['Status'] = df['IsValid'].apply(lambda x: '✔️ Valid' if x else '❌ Invalid')
-            df_display['NeedsUpdate'] = df['NeedsUpdate'].apply(lambda x: '⚠️ Yes' if x else '')
-
-            display_columns = ['Adress1', 'Adress2', 'City', 'State', 'Zip5', 'Status', 'StandardizedAddress', 'NeedsUpdate', 'ValidationMessage']
-            df_display = df_display[display_columns]
-
-            st.markdown("### 🧾 Validation Results")
-            st.dataframe(df_display.style.applymap(
-                lambda val: 'color: green' if val == '✔️ Valid' else ('color: red' if val == '❌ Invalid' else ('color: orange' if val == '⚠️ Yes' else None)),
-                subset=['Status', 'NeedsUpdate']
-            ))
-
-            # Download button
-            output = io.BytesIO()
-            df.to_excel(output, index=False)
-            st.download_button(
-                label="📥 Download Results as Excel",
-                data=output.getvalue(),
-                file_name="validated_addresses.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        if token
