@@ -4,6 +4,7 @@ import requests
 import io
 
 # USPS API credentials
+# USPS API credentials
 CONSUMER_KEY = "kMt8AuLvXACeHwys6rb0gqxH2TFMK0tmmyAXaC7SiQAWeQHN"
 CONSUMER_SECRET = "ZyViTGQUTjwkAAnLIDwYU9rUlHJQPlXWJH8KQCK7Yvngh9qXVgVMn99ZHziQok3r"
 
@@ -19,7 +20,7 @@ def get_access_token():
     if response.status_code == 200:
         return response.json()["access_token"]
     else:
-        st.error("Failed to get USPS access token.")
+        st.error("❌ Failed to get USPS access token.")
         return None
 
 def validate_address(token, street, city, state, zip_code):
@@ -36,10 +37,6 @@ def validate_address(token, street, city, state, zip_code):
     try:
         response = requests.get(url, headers=headers, params=params)
 
-        # Debug logging
-        st.write("▶️ Request sent:", params)
-        st.write("📬 USPS response:", response.text)
-
         if response.status_code == 200:
             data = response.json()["address"]
             return {
@@ -48,55 +45,81 @@ def validate_address(token, street, city, state, zip_code):
                 "ValidationMessage": ""
             }
         elif response.status_code == 404:
-            return {"IsValid": False, "StandardizedAddress": "", "ValidationMessage": "Not Found"}
+            return {"IsValid": False, "StandardizedAddress": "", "ValidationMessage": "Address Not Found"}
         else:
             return {"IsValid": False, "StandardizedAddress": "", "ValidationMessage": response.text}
     except Exception as e:
         return {"IsValid": False, "StandardizedAddress": "", "ValidationMessage": str(e)}
 
-# Streamlit UI
+# ---------- UI Layout ----------
+st.set_page_config(page_title="USPS Address Validator", layout="centered")
 st.title("📬 USPS Address Validator")
-st.write("Upload an Excel file with columns: `Adress1`, `Adress2`, `City`, `State`, `Zip5`")
+st.markdown("Upload an Excel file with columns: **Adress1**, **Adress2**, **City**, **State**, **Zip5**")
+st.markdown("This tool checks each address against the USPS Address API and gives you a downloadable result.")
 
-uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx"])
+uploaded_file = st.file_uploader("📤 Upload your Excel file", type=["xlsx"])
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
-    st.write("File Preview:", df.head())
+    st.success("✅ File uploaded successfully!")
+    st.write("📄 **Preview:**")
+    st.dataframe(df.head())
 
-    if st.button("Validate Addresses"):
-        with st.spinner("Getting USPS access token..."):
+    if st.button("🚀 Validate Addresses"):
+        with st.spinner("🔐 Getting USPS access token..."):
             token = get_access_token()
 
         if token:
-            results = []
-            for i, row in df.iterrows():
-                st.markdown(f"**Processing address {i+1} of {len(df)}...**")
+            valid_count = 0
+            invalid_count = 0
 
-                # Clean all input values and handle NaNs safely
-                address1 = str(row.get('Adress1', '')).strip()
-                address2 = row.get('Adress2', '')
-                address2 = str(address2).strip() if pd.notna(address2) else ''
-                street = f"{address2} {address1}".strip()
+            # Add result columns
+            df['IsValid'] = ''
+            df['StandardizedAddress'] = ''
+            df['ValidationMessage'] = ''
 
-                city = str(row.get("City", "")).strip()
-                state = str(row.get("State", "")).strip()
-                zip_code = str(row.get("Zip5", "")).strip()
+            with st.spinner("📦 Validating each address..."):
+                for i, row in df.iterrows():
+                    address1 = str(row.get('Adress1', '')).strip()
+                    address2 = row.get('Adress2', '')
+                    address2 = str(address2).strip() if pd.notna(address2) else ''
+                    street = f"{address2} {address1}".strip()
+                    city = str(row.get("City", "")).strip()
+                    state = str(row.get("State", "")).strip()
+                    zip_code = str(row.get("Zip5", "")).strip()
 
-                result = validate_address(token, street, city, state, zip_code)
+                    result = validate_address(token, street, city, state, zip_code)
 
-                df.at[i, 'IsValid'] = result["IsValid"]
-                df.at[i, 'StandardizedAddress'] = result["StandardizedAddress"]
-                df.at[i, 'ValidationMessage'] = result["ValidationMessage"]
+                    df.at[i, 'IsValid'] = result["IsValid"]
+                    df.at[i, 'StandardizedAddress'] = result["StandardizedAddress"]
+                    df.at[i, 'ValidationMessage'] = result["ValidationMessage"]
 
-            st.success("Validation complete!")
-            st.dataframe(df)
+                    if result["IsValid"]:
+                        valid_count += 1
+                    else:
+                        invalid_count += 1
 
-            # Prepare download
+            st.success(f"🎯 Validation complete! ✔️ {valid_count} valid | ❌ {invalid_count} invalid")
+
+            # Add a status column with emoji for display
+            df_display = df.copy()
+            df_display['Status'] = df['IsValid'].apply(lambda x: '✔️ Valid' if x else '❌ Invalid')
+
+            # Reorder for display
+            display_columns = ['Adress1', 'Adress2', 'City', 'State', 'Zip5', 'Status', 'StandardizedAddress', 'ValidationMessage']
+            df_display = df_display[display_columns]
+
+            st.markdown("### 🧾 Validation Results")
+            st.dataframe(df_display.style.applymap(
+                lambda val: 'color: green' if val == '✔️ Valid' else ('color: red' if val == '❌ Invalid' else None),
+                subset=['Status']
+            ))
+
+            # Excel download
             output = io.BytesIO()
             df.to_excel(output, index=False)
             st.download_button(
-                label="Download Results as Excel",
+                label="📥 Download Results as Excel",
                 data=output.getvalue(),
                 file_name="validated_addresses.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
