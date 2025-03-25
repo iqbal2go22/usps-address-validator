@@ -73,8 +73,12 @@ if uploaded_file:
             for i, row in df.iterrows():
                 st.markdown(f"**Processing address {i+1} of {len(df)}...**")
 
-                # Clean all input values
-                street = f"{str(row.get('Adress2', '')).strip()} {str(row.get('Adress1', '')).strip()}".strip()
+                # Clean all input values and handle NaNs safely
+                address1 = str(row.get('Adress1', '')).strip()
+                address2 = row.get('Adress2', '')
+                address2 = str(address2).strip() if pd.notna(address2) else ''
+                street = f"{address2} {address1}".strip()
+
                 city = str(row.get("City", "")).strip()
                 state = str(row.get("State", "")).strip()
                 zip_code = str(row.get("Zip5", "")).strip()
