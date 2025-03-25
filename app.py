@@ -35,6 +35,11 @@ def validate_address(token, street, city, state, zip_code):
 
     try:
         response = requests.get(url, headers=headers, params=params)
+
+        # Debug logging
+        st.write("▶️ Request sent:", params)
+        st.write("📬 USPS response:", response.text)
+
         if response.status_code == 200:
             data = response.json()["address"]
             return {
@@ -66,15 +71,16 @@ if uploaded_file:
         if token:
             results = []
             for i, row in df.iterrows():
-                st.text(f"Validating address {i+1} of {len(df)}...")
-                street = f"{row.get('Adress2', '')} {row.get('Adress1', '')}".strip()
-                result = validate_address(
-                    token,
-                    street,
-                    row.get("City", ""),
-                    row.get("State", ""),
-                    row.get("Zip5", "")
-                )
+                st.markdown(f"**Processing address {i+1} of {len(df)}...**")
+
+                # Clean all input values
+                street = f"{str(row.get('Adress2', '')).strip()} {str(row.get('Adress1', '')).strip()}".strip()
+                city = str(row.get("City", "")).strip()
+                state = str(row.get("State", "")).strip()
+                zip_code = str(row.get("Zip5", "")).strip()
+
+                result = validate_address(token, street, city, state, zip_code)
+
                 df.at[i, 'IsValid'] = result["IsValid"]
                 df.at[i, 'StandardizedAddress'] = result["StandardizedAddress"]
                 df.at[i, 'ValidationMessage'] = result["ValidationMessage"]
