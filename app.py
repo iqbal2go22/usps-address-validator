@@ -184,6 +184,7 @@ if uploaded_file:
 
             # Show map
             geo_df = df[['Latitude', 'Longitude']].dropna()
+            geo_df.columns = ['latitude', 'longitude']  # ✅ Fixes the case sensitivity
             if not geo_df.empty:
                 st.markdown("### 🗺️ Customer Locations Map")
                 st.map(geo_df)
