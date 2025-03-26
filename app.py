@@ -6,7 +6,7 @@ import time
 
 # ------------------ Secrets from Streamlit ------------------
 CONSUMER_KEY = st.secrets["USPS_CONSUMER_KEY"]
-CONSUMER_SECRET = st.secrets["USUS_CONSUMER_SECRET"]
+CONSUMER_SECRET = st.secrets["USPS_CONSUMER_SECRET"]
 OPENCAGE_API_KEY = st.secrets["OPENCAGE_API_KEY"]
 
 # ------------------ USPS Token ------------------
