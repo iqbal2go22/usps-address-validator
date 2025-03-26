@@ -183,11 +183,16 @@ if uploaded_file:
             ))
 
             # Show map
-            geo_df = df[['Latitude', 'Longitude']].dropna()
-            geo_df.columns = ['latitude', 'longitude']  # ✅ Fixes the case sensitivity
+            geo_df = df[['Latitude', 'Longitude']].copy()
+            geo_df = geo_df.dropna()  # remove NaNs
+            geo_df = geo_df.apply(pd.to_numeric, errors='coerce')  # ensure float type
+            geo_df.columns = ['latitude', 'longitude']
+            geo_df = geo_df.dropna()  # drop rows where conversion failed
+
             if not geo_df.empty:
                 st.markdown("### 🗺️ Customer Locations Map")
                 st.map(geo_df)
+
 
             output = io.BytesIO()
             df.to_excel(output, index=False)
