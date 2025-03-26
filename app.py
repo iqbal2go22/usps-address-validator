@@ -6,7 +6,7 @@ import time
 
 # ------------------ Secrets from Streamlit ------------------
 CONSUMER_KEY = st.secrets["USPS_CONSUMER_KEY"]
-CONSUMER_SECRET = st.secrets["USPS_CONSUMER_SECRET"]
+CONSUMER_SECRET = st.secrets["USUS_CONSUMER_SECRET"]
 OPENCAGE_API_KEY = st.secrets["OPENCAGE_API_KEY"]
 
 # ------------------ USPS Token ------------------
@@ -42,7 +42,7 @@ def validate_address(token, street, city, state, zip_code_input, original_full_a
 
         if response.status_code == 200:
             data = response.json()["address"]
-            standardized = f"{data.get('secondaryAddress', '')} {data['streetAddress']}, {data['city']}, {data['state']} {data['ZIPCode']}".strip()
+            standardized = f"{data.get('secondaryAddress', '')} {data['streetAddress']}, {data['city']}, {data['state']} {data['ZIPCode']}`.strip()
             needs_update = standardized.upper() != original_full_address.upper()
             return {
                 "IsValid": True,
@@ -94,20 +94,20 @@ def get_geocode(address):
 
 # ------------------ UI ------------------
 st.set_page_config(page_title="SiteOne Address Validator", layout="centered")
-st.title("📍 SiteOne Address Validator")
+st.title("\ud83d\udccd SiteOne Address Validator")
 st.markdown("Upload an Excel file with columns: **Adress1**, **Adress2**, **City**, **State**, **Zip5**")
 st.markdown("The app validates U.S. addresses using USPS and geocodes them using OpenCage.")
 
-uploaded_file = st.file_uploader("📤 Upload your Excel file", type=["xlsx"])
+uploaded_file = st.file_uploader("\ud83d\udcc4 Upload your Excel file", type=["xlsx"])
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
-    st.success("✅ File uploaded successfully!")
-    st.write("📄 **Preview:**")
+    st.success("\u2705 File uploaded successfully!")
+    st.write("\ud83d\udcc4 **Preview:**")
     st.dataframe(df.head())
 
-    if st.button("🚀 Validate and Geocode"):
-        with st.spinner("🔐 Getting USPS access token..."):
+    if st.button("\ud83d\ude80 Validate and Geocode"):
+        with st.spinner("\ud83d\udd10 Getting USPS access token..."):
             token = get_access_token()
 
         if token:
@@ -154,14 +154,13 @@ if uploaded_file:
                 else:
                     invalid_count += 1
 
-                # Progress bar and ETA
                 elapsed = time.time() - start_time
                 avg_time = elapsed / (i + 1)
                 remaining = int(avg_time * (total - i - 1))
                 status_text.text(f"Processing {i+1} of {total}... Estimated time left: {remaining} seconds")
                 progress.progress((i + 1) / total)
 
-            st.success(f"🎯 Done! ✔️ {valid_count} valid | ❌ {invalid_count} invalid | ⚠️ {update_count} need update")
+            st.success(f"\ud83c\udfaf Done! \u2714\ufe0f {valid_count} valid | \u274c {invalid_count} invalid | \u26a0\ufe0f {update_count} need update")
 
             df_display = df.copy()
             df_display['Status'] = df['IsValid'].apply(lambda x: '✔️ Valid' if x else '❌ Invalid')
@@ -175,7 +174,7 @@ if uploaded_file:
             existing_cols = [col for col in display_columns if col in df_display.columns]
             df_display = df_display[existing_cols]
 
-            st.markdown("### 🧾 Validation Results")
+            st.markdown("### \ud83d\udccb Validation Results")
             st.dataframe(df_display.style.applymap(
                 lambda val: 'color: green' if val == '✔️ Valid' else (
                     'color: red' if val == '❌ Invalid' else (
@@ -183,10 +182,16 @@ if uploaded_file:
                 subset=['Status', 'NeedsUpdate']
             ))
 
+            # Show map
+            geo_df = df[['Latitude', 'Longitude']].dropna()
+            if not geo_df.empty:
+                st.markdown("### \ud83d\uddfa\ufe0f Customer Locations Map")
+                st.map(geo_df)
+
             output = io.BytesIO()
             df.to_excel(output, index=False)
             st.download_button(
-                label="📥 Download Results as Excel",
+                label="\ud83d\udcc5 Download Results as Excel",
                 data=output.getvalue(),
                 file_name="validated_addresses_with_geocodes.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
