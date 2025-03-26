@@ -3,13 +3,9 @@ import pandas as pd
 import requests
 import io
 
-# USPS API credentials
-# USPS API credentials
-CONSUMER_KEY = "kMt8AuLvXACeHwys6rb0gqxH2TFMK0tmmyAXaC7SiQAWeQHN"
-CONSUMER_SECRET = "ZyViTGQUTjwkAAnLIDwYU9rUlHJQPlXWJH8KQCK7Yvngh9qXVgVMn99ZHziQok3r"
-
-# OpenCage API for geocoding
-OPENCAGE_API_KEY = "e52347a41d064e48a19091df61ad7a3a"
+CONSUMER_KEY = st.secrets["USPS_CONSUMER_KEY"]
+CONSUMER_SECRET = st.secrets["USPS_CONSUMER_SECRET"]
+OPENCAGE_API_KEY = st.secrets["OPENCAGE_API_KEY"]
 
 
 
