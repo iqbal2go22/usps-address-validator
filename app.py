@@ -2,14 +2,14 @@ import streamlit as st
 import pandas as pd
 import requests
 import io
+import time
 
+# ------------------ Secrets from Streamlit ------------------
 CONSUMER_KEY = st.secrets["USPS_CONSUMER_KEY"]
 CONSUMER_SECRET = st.secrets["USPS_CONSUMER_SECRET"]
 OPENCAGE_API_KEY = st.secrets["OPENCAGE_API_KEY"]
 
-
-
-# ------------------ USPS Auth ------------------
+# ------------------ USPS Token ------------------
 def get_access_token():
     url = "https://apis.usps.com/oauth2/v3/token"
     headers = {"Content-Type": "application/json"}
@@ -25,7 +25,7 @@ def get_access_token():
         st.error("❌ Failed to get USPS access token.")
         return None
 
-# ------------------ USPS Address Validation ------------------
+# ------------------ USPS Validation ------------------
 def validate_address(token, street, city, state, zip_code_input, original_full_address):
     url = "https://apis.usps.com/addresses/v3/address"
     headers = {"Authorization": f"Bearer {token}"}
@@ -44,14 +44,12 @@ def validate_address(token, street, city, state, zip_code_input, original_full_a
             data = response.json()["address"]
             standardized = f"{data.get('secondaryAddress', '')} {data['streetAddress']}, {data['city']}, {data['state']} {data['ZIPCode']}".strip()
             needs_update = standardized.upper() != original_full_address.upper()
-
             return {
                 "IsValid": True,
                 "StandardizedAddress": standardized,
                 "ValidationMessage": "",
                 "NeedsUpdate": needs_update
             }
-
         elif response.status_code == 404:
             return {
                 "IsValid": False,
@@ -94,7 +92,7 @@ def get_geocode(address):
     except Exception:
         return None, None
 
-# ------------------ Streamlit UI ------------------
+# ------------------ UI ------------------
 st.set_page_config(page_title="SiteOne Address Validator", layout="centered")
 st.title("📍 SiteOne Address Validator")
 st.markdown("Upload an Excel file with columns: **Adress1**, **Adress2**, **City**, **State**, **Zip5**")
@@ -124,35 +122,44 @@ if uploaded_file:
             df['Latitude'] = ''
             df['Longitude'] = ''
 
-            with st.spinner("📦 Validating and geocoding..."):
-                for i, row in df.iterrows():
-                    address1 = str(row.get('Adress1', '')).strip()
-                    address2 = row.get('Adress2', '')
-                    address2 = str(address2).strip() if pd.notna(address2) else ''
-                    street = f"{address2} {address1}".strip()
-                    city = str(row.get("City", "")).strip()
-                    state = str(row.get("State", "")).strip()
-                    zip_code = str(row.get("Zip5", "")).strip()
+            progress = st.progress(0)
+            status_text = st.empty()
+            total = len(df)
+            start_time = time.time()
 
-                    original_input = f"{address2} {address1}, {city}, {state} {zip_code}".strip()
+            for i, row in df.iterrows():
+                address1 = str(row.get('Adress1', '')).strip()
+                address2 = row.get('Adress2', '')
+                address2 = str(address2).strip() if pd.notna(address2) else ''
+                street = f"{address2} {address1}".strip()
+                city = str(row.get("City", "")).strip()
+                state = str(row.get("State", "")).strip()
+                zip_code = str(row.get("Zip5", "")).strip()
+                original_input = f"{address2} {address1}, {city}, {state} {zip_code}".strip()
 
-                    result = validate_address(token, street, city, state, zip_code, original_input)
+                result = validate_address(token, street, city, state, zip_code, original_input)
 
-                    df.at[i, 'IsValid'] = result["IsValid"]
-                    df.at[i, 'StandardizedAddress'] = result["StandardizedAddress"]
-                    df.at[i, 'ValidationMessage'] = result["ValidationMessage"]
-                    df.at[i, 'NeedsUpdate'] = result["NeedsUpdate"]
+                df.at[i, 'IsValid'] = result["IsValid"]
+                df.at[i, 'StandardizedAddress'] = result["StandardizedAddress"]
+                df.at[i, 'ValidationMessage'] = result["ValidationMessage"]
+                df.at[i, 'NeedsUpdate'] = result["NeedsUpdate"]
 
-                    if result["IsValid"]:
-                        valid_count += 1
-                        if result["NeedsUpdate"]:
-                            update_count += 1
-                        # Geocode if valid
-                        lat, lng = get_geocode(result["StandardizedAddress"])
-                        df.at[i, 'Latitude'] = lat
-                        df.at[i, 'Longitude'] = lng
-                    else:
-                        invalid_count += 1
+                if result["IsValid"]:
+                    valid_count += 1
+                    if result["NeedsUpdate"]:
+                        update_count += 1
+                    lat, lng = get_geocode(result["StandardizedAddress"])
+                    df.at[i, 'Latitude'] = lat
+                    df.at[i, 'Longitude'] = lng
+                else:
+                    invalid_count += 1
+
+                # Progress bar and ETA
+                elapsed = time.time() - start_time
+                avg_time = elapsed / (i + 1)
+                remaining = int(avg_time * (total - i - 1))
+                status_text.text(f"Processing {i+1} of {total}... Estimated time left: {remaining} seconds")
+                progress.progress((i + 1) / total)
 
             st.success(f"🎯 Done! ✔️ {valid_count} valid | ❌ {invalid_count} invalid | ⚠️ {update_count} need update")
 
